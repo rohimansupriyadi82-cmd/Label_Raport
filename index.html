@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LabelKu — Cetak Label Siswa F4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{fontFamily:{jakarta:['"Plus Jakarta Sans"','sans-serif'],mono:['"JetBrains Mono"','monospace']}}}}</script>
+
+<style>
+/* ─────────────────────────────────────────
+   RESET & BASE
+───────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:'Plus Jakarta Sans',sans-serif;}
+
+/* CSS custom property for dynamic border color */
+:root { --lbc: #000000; }
+
+/* ─────────────────────────────────────────
+   SCREEN
+───────────────────────────────────────── */
+@media screen {
+  #print-area{display:none!important;}
+
+  ::-webkit-scrollbar{width:5px;height:5px;}
+  ::-webkit-scrollbar-track{background:#0f172a;}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:99px;}
+
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;font-size:13.5px;font-weight:500;color:#94a3b8;cursor:pointer;transition:background .14s,color .14s;border-left:3px solid transparent;}
+  .nav-item:hover{background:rgba(255,255,255,.06);color:#cbd5e1;}
+  .nav-item.active{background:rgba(99,102,241,.22);color:#e0e7ff;border-left-color:#6366f1;font-weight:700;}
+  .nav-item .ni{width:16px;text-align:center;font-size:13px;}
+
+  #dropzone{border:2px dashed #cbd5e1;background:#fff;border-radius:16px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .18s,background .18s,box-shadow .18s;user-select:none;}
+  #dropzone:hover,#dropzone.dz-over{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 4px rgba(99,102,241,.1);}
+
+  /* color swatch button */
+  .cswatch{width:28px;height:28px;border-radius:50%;border:2.5px solid transparent;cursor:pointer;transition:transform .15s,box-shadow .15s;flex-shrink:0;}
+  .cswatch:hover{transform:scale(1.15);}
+  .cswatch.selected{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.4),0 0 0 5px var(--sw);}
+
+  #tbl-body tr:hover td{background:#f8fafc;}
+
+  @keyframes toastIn{from{opacity:0;transform:translateY(-12px) scale(.95);}to{opacity:1;transform:none;}}
+
+  /* ── Screen Paper
+     F4 215×330mm | scale 1.77px/mm → 380×584px
+     top: 15mm→26.55px  left: 17.5mm→30.975px
+     col: 90mm→159.3px  row: 30mm→53.1px
+  ── */
+  .sc-paper{position:relative;width:380px;height:584px;background:#fff;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 4px 14px rgba(0,0,0,.4),0 24px 80px rgba(0,0,0,.7);}
+  .sc-grid{position:absolute;top:26.55px;left:30.975px;display:grid;grid-template-columns:repeat(2,159.3px);grid-template-rows:repeat(10,53.1px);gap:0;}
+
+  .sc-label{
+    width:159.3px;height:53.1px;
+    border:0.53px solid var(--lbc);
+    margin-left:-0.53px;margin-top:-0.53px;
+    position:relative;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    /* dotted-matrix texture */
+    background-color:#f8fafc;
+    background-image:radial-gradient(#cbd5e1 0.6px,transparent 0.6px),linear-gradient(180deg,rgba(255,255,255,.85) 0%,rgba(241,245,249,.9) 100%);
+    background-size:9px 9px,100% 100%;
+  }
+  .sc-label .sl-top{position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#4338ca 0%,#4f46e5 45%,#3b82f6 100%);border-bottom:0.4px solid rgba(67,56,202,.25);}
+  .sc-label .sl-logo{display:block;height:11px;object-fit:contain;margin-bottom:1.5px;margin-top:2px;position:relative;z-index:2;}
+  .sc-label .sl-body{position:relative;z-index:2;text-align:center;padding:0 5px;width:100%;margin-top:-1px;}
+  .sc-label .sl-name{font-family:'Plus Jakarta Sans',sans-serif;font-size:8px;font-weight:800;color:#0f172a;text-transform:uppercase;line-height:1.15;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sc-label .sl-id{margin-top:2px;display:inline-block;background:rgba(255,255,255,.8);border-radius:3px;padding:1.5px 4px;font-family:'JetBrains Mono',monospace;font-size:5.4px;font-weight:500;color:#475569;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .sc-label.is-empty{background-color:#f8fafc;background-image:radial-gradient(#e2e8f0 0.6px,transparent 0.6px),linear-gradient(180deg,rgba(255,255,255,.6) 0%,rgba(248,250,252,.7) 100%);background-size:9px 9px,100% 100%;}
+  .sc-label.is-empty .sl-top{background:#e2e8f0;}
+  .sc-label.is-empty .sl-name{color:#cbd5e1;font-style:italic;font-weight:400;text-transform:none;font-size:7px;}
+  .sc-label.is-empty .sl-id{color:#e2e8f0;background:rgba(255,255,255,.5);}
+  .sc-page-lbl{position:absolute;bottom:-22px;left:0;right:0;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#64748b;}
+}
+
+/* ─────────────────────────────────────────
+   PRINT
+───────────────────────────────────────── */
+@media print {
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  @page{size:215mm 330mm;margin:0;}
+  html,body{width:215mm;height:330mm;margin:0;padding:0;background:white;}
+  #dashboard-ui{display:none!important;}
+  #print-area{display:block!important;}
+
+  .pp{width:215mm;height:330mm;position:relative;page-break-after:always;overflow:hidden;background:white;}
+  .pp:last-child{page-break-after:auto;}
+
+  .pp-grid{position:absolute;top:15mm;left:17.5mm;display:grid;grid-template-columns:repeat(2,90mm);grid-template-rows:repeat(10,30mm);gap:0;}
+
+  .pl{
+    width:90mm;height:30mm;
+    border:0.3mm solid var(--lbc,#000);
+    margin-left:-0.3mm;margin-top:-0.3mm;
+    position:relative;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background-color:#f8fafc;
+    background-image:radial-gradient(#cbd5e1 0.5px,transparent 0.5px),linear-gradient(180deg,rgba(255,255,255,.9) 0%,rgba(241,245,249,.95) 100%);
+    background-size:5mm 5mm,100% 100%;
+  }
+  .pl-top{position:absolute;top:0;left:0;right:0;height:2.5mm;background:linear-gradient(90deg,#4338ca 0%,#4f46e5 45%,#3b82f6 100%)!important;}
+  .pl-logo{display:block;height:6mm;object-fit:contain;margin-bottom:1mm;position:relative;z-index:2;}
+  .pl-body{position:relative;z-index:2;text-align:center;padding:0 3mm;width:100%;}
+  .pl-name{font-family:'Plus Jakarta Sans',sans-serif;font-size:11pt;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.01em;line-height:1.2;display:block;white-space:nowrap;overflow:hidden;}
+  .pl-id{display:inline-block;margin-top:1mm;background:rgba(255,255,255,.85)!important;border-radius:1mm;padding:.4mm 2mm;font-family:'JetBrains Mono',monospace;font-size:7.5pt;font-weight:500;color:#334155;letter-spacing:.03em;white-space:nowrap;overflow:hidden;}
+
+  /* crop mark stubs */
+  .cm-hl{position:absolute;left:0;height:0;width:14mm;border-top:.25mm dashed #666;z-index:50;}
+  .cm-hr{position:absolute;right:0;height:0;width:14mm;border-top:.25mm dashed #666;z-index:50;}
+  .cm-vt{position:absolute;top:0;width:0;height:12mm;border-left:.25mm dashed #666;z-index:50;}
+  .cm-vb{position:absolute;bottom:0;width:0;height:12mm;border-left:.25mm dashed #666;z-index:50;}
+  .sci{position:absolute;z-index:51;color:#666;font-size:2.8mm;line-height:1;}
+}
+</style>
+</head>
+<body class="bg-slate-50 h-full font-jakarta">
+
+<!-- ══════════════════════════════════════════
+     DASHBOARD
+══════════════════════════════════════════ -->
+<div id="dashboard-ui" class="flex h-screen overflow-hidden">
+
+  <!-- ▌SIDEBAR ▌ -->
+  <aside class="w-72 flex-shrink-0 flex flex-col overflow-hidden" style="background:#0f172a;">
+
+    <!-- Branding -->
+    <div class="px-5 pt-6 pb-5" style="border-bottom:1px solid rgba(255,255,255,.07);">
+      <div class="flex items-center gap-3 mb-3.5">
+        <div class="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center"
+             style="background:linear-gradient(135deg,#4f46e5,#3b82f6);box-shadow:0 8px 24px rgba(79,70,229,.45);">
+          <i class="fa-solid fa-scissors text-white text-base"></i>
+        </div>
+        <div>
+          <div class="text-white font-extrabold text-xl leading-none tracking-tight">LabelKu</div>
+          <div class="text-[11px] font-mono mt-0.5" style="color:#64748b;">Student Label System</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full" style="background:#1e1b4b;border:1px solid rgba(99,102,241,.4);color:#a5b4fc;">
+          <i class="fa-solid fa-recycle" style="font-size:9px;"></i> Zero-Waste Grid
+        </span>
+        <span class="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full" style="background:#052e16;border:1px solid rgba(34,197,94,.3);color:#86efac;">
+          <i class="fa-solid fa-bolt" style="font-size:9px;"></i> Auto-Save
+        </span>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="px-3 py-4 space-y-0.5">
+      <div class="text-[10px] font-bold uppercase tracking-widest px-3 mb-2" style="color:#475569;">Menu</div>
+      <div class="nav-item active"><i class="fa-solid fa-table-list ni" style="color:#818cf8;"></i> Data Siswa</div>
+      <div class="nav-item"><i class="fa-solid fa-eye ni"></i> Pratinjau Label</div>
+      <div class="nav-item"><i class="fa-solid fa-print ni"></i> Cetak Massal</div>
+      <div class="text-[10px] font-bold uppercase tracking-widest px-3 mb-2 mt-4" style="color:#475569;">Sistem</div>
+      <div class="nav-item"><i class="fa-solid fa-sliders ni"></i> Konfigurasi</div>
+      <div class="nav-item"><i class="fa-solid fa-circle-question ni"></i> Bantuan</div>
+    </nav>
+
+    <div class="flex-1"></div>
+
+    <!-- Spec Card -->
+    <div class="mx-3 mb-4 p-4 rounded-2xl" style="background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);">
+      <div class="text-[11px] font-bold mb-3 flex items-center gap-2" style="color:#e2e8f0;">
+        <i class="fa-solid fa-ruler-combined" style="color:#818cf8;font-size:11px;"></i> Spesifikasi Cetak
+      </div>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px]" style="color:#64748b;">Kertas</span>
+          <code class="text-[10px] font-bold px-2 py-0.5 rounded-md" style="background:#1e293b;color:#e2e8f0;">F4 — 215×330mm</code>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px]" style="color:#64748b;">Label</span>
+          <code class="text-[10px] font-bold px-2 py-0.5 rounded-md" style="background:#1e293b;color:#e2e8f0;">90×30mm</code>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px]" style="color:#64748b;">Grid</span>
+          <code class="text-[10px] font-bold px-2 py-0.5 rounded-md" style="background:#1e293b;color:#e2e8f0;">2 Kol × 10 Baris</code>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px]" style="color:#64748b;">Kapasitas</span>
+          <code class="text-[10px] font-bold px-2 py-0.5 rounded-md" style="background:#064e3b;color:#6ee7b7;">20 Label/Lembar</code>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px]" style="color:#64748b;">Sela Potong</span>
+          <code class="text-[10px] font-bold px-2 py-0.5 rounded-md" style="background:#1e293b;color:#e2e8f0;">0mm</code>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ▌MAIN ▌ -->
+  <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+    <!-- Header -->
+    <header class="flex-shrink-0 bg-white px-8 py-4 flex items-center justify-between" style="border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,.04);">
+      <div>
+        <h1 class="text-xl font-extrabold leading-none" style="color:#0f172a;">Manajemen Label Siswa</h1>
+        <p class="text-sm mt-0.5" style="color:#64748b;">Impor Excel, kelola data, dan cetak label nama untuk kertas F4</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="loadSimulation()"
+          class="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all"
+          style="border:2px solid #e2e8f0;background:#fff;color:#475569;"
+          onmouseover="this.style.borderColor='#6366f1';this.style.color='#4f46e5';"
+          onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#475569';">
+          <i class="fa-solid fa-flask-vial text-xs"></i> Muat Data Simulasi
+        </button>
+        <button onclick="triggerPrint()"
+          class="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl text-white transition-all active:scale-95"
+          style="background:linear-gradient(135deg,#4f46e5,#3b82f6);box-shadow:0 4px 16px rgba(79,70,229,.35);"
+          onmouseover="this.style.filter='brightness(1.08)';"
+          onmouseout="this.style.filter='none';">
+          <i class="fa-solid fa-print text-xs"></i> Cetak Sekarang (F4)
+        </button>
+      </div>
+    </header>
+
+    <!-- Scrollable Body -->
+    <div class="flex-1 overflow-auto p-8 space-y-6">
+
+      <!-- Row 1: Dropzone + Storage + Color Selector -->
+      <div class="grid gap-5" style="grid-template-columns:3fr 2fr;">
+
+        <!-- Dropzone -->
+        <div>
+          <p class="text-sm font-bold mb-2 flex items-center gap-2" style="color:#334155;">
+            <i class="fa-solid fa-file-excel" style="color:#16a34a;"></i> Impor Data dari Excel
+          </p>
+          <div id="dropzone"
+               onclick="document.getElementById('file-input').click()"
+               ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            <div class="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center" style="background:#f1f5f9;">
+              <i class="fa-solid fa-cloud-arrow-up text-2xl" style="color:#94a3b8;"></i>
+            </div>
+            <p class="text-sm font-bold" style="color:#334155;">Klik atau seret file Excel ke sini</p>
+            <p class="text-xs mt-2" style="color:#94a3b8;">
+              Format <code style="background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;">.xlsx</code>
+              / <code style="background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;">.xls</code>
+              — Kolom:
+              <code style="background:#ede9fe;color:#4f46e5;padding:1px 6px;border-radius:4px;">Nama</code>
+              <code style="background:#ede9fe;color:#4f46e5;padding:1px 6px;border-radius:4px;margin-left:3px;">NIS</code>
+              <code style="background:#ede9fe;color:#4f46e5;padding:1px 6px;border-radius:4px;margin-left:3px;">NISN</code>
+            </p>
+          </div>
+          <input type="file" id="file-input" accept=".xlsx,.xls" class="hidden" onchange="onFileSelect(event)">
+        </div>
+
+        <!-- Right column: Storage + Color -->
+        <div class="flex flex-col gap-4">
+
+          <!-- Storage Panel -->
+          <div>
+            <p class="text-sm font-bold mb-2 flex items-center gap-2" style="color:#334155;">
+              <i class="fa-solid fa-database" style="color:#6366f1;"></i> Status Penyimpanan
+            </p>
+            <div class="bg-white rounded-2xl p-4" style="border:1px solid #e2e8f0;">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <div id="ui-count" class="text-3xl font-extrabold leading-none" style="color:#0f172a;">0</div>
+                  <div class="text-xs font-medium mt-0.5" style="color:#64748b;">Siswa Terdaftar</div>
+                </div>
+                <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#ede9fe;">
+                  <i class="fa-solid fa-users" style="color:#6366f1;"></i>
+                </div>
+              </div>
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-xs">
+                  <span style="color:#64748b;">Lembar F4 dibutuhkan</span>
+                  <span id="ui-pages" class="font-mono font-bold" style="color:#334155;">0 lembar</span>
+                </div>
+                <div style="height:1px;background:#f1f5f9;"></div>
+                <div class="flex items-center gap-2">
+                  <span class="inline-block w-2 h-2 rounded-full" style="background:#22c55e;"></span>
+                  <span class="text-xs" style="color:#64748b;">Auto-save ke <strong style="color:#334155;">LocalStorage</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ★ COLOR SELECTOR ★ -->
+          <div>
+            <p class="text-sm font-bold mb-2 flex items-center gap-2" style="color:#334155;">
+              <i class="fa-solid fa-palette" style="color:#ec4899;"></i> Warna Garis Tepi Label
+            </p>
+            <div class="bg-white rounded-2xl p-4" style="border:1px solid #e2e8f0;">
+              <!-- Swatches row -->
+              <div class="flex items-center gap-3 mb-3">
+                <button class="cswatch selected" style="background:#000000;--sw:#000000;" data-color="#000000" onclick="setColor(this)" title="Classic Black"></button>
+                <button class="cswatch" style="background:#4f46e5;--sw:#4f46e5;" data-color="#4f46e5" onclick="setColor(this)" title="Elegant Indigo"></button>
+                <button class="cswatch" style="background:#059669;--sw:#059669;" data-color="#059669" onclick="setColor(this)" title="Emerald Green"></button>
+                <button class="cswatch" style="background:#dc2626;--sw:#dc2626;" data-color="#dc2626" onclick="setColor(this)" title="Crimson Red"></button>
+                <button class="cswatch" style="background:#d97706;--sw:#d97706;" data-color="#d97706" onclick="setColor(this)" title="Luxury Amber"></button>
+              </div>
+              <!-- Color name + preview bar -->
+              <div class="flex items-center gap-3">
+                <div id="color-bar" class="h-2.5 flex-1 rounded-full transition-all duration-300" style="background:#000000;"></div>
+                <div id="color-name" class="text-xs font-bold font-mono" style="color:#334155;min-width:90px;text-align:right;">Classic Black</div>
+              </div>
+              <!-- Dropdown (hidden, controlled by swatches; kept for accessibility) -->
+              <select id="color-select" class="hidden" onchange="setColorFromSelect(this.value)">
+                <option value="#000000">Classic Black</option>
+                <option value="#4f46e5">Elegant Indigo</option>
+                <option value="#059669">Emerald Green</option>
+                <option value="#dc2626">Crimson Red</option>
+                <option value="#d97706">Luxury Amber / Gold</option>
+              </select>
+            </div>
+          </div>
+
+        </div><!-- end right col -->
+      </div><!-- end row 1 -->
+
+      <!-- Table -->
+      <div class="bg-white rounded-2xl overflow-hidden" style="border:1px solid #e2e8f0;">
+        <div class="px-6 py-4 flex items-center justify-between" style="border-bottom:1px solid #f1f5f9;">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-table text-sm" style="color:#6366f1;"></i>
+            <span class="font-bold text-sm" style="color:#0f172a;">Daftar Siswa</span>
+            <span id="ui-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full" style="background:#ede9fe;color:#4f46e5;">0 data</span>
+          </div>
+          <button onclick="clearData()"
+            class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all"
+            style="color:#f43f5e;border:1px solid transparent;"
+            onmouseover="this.style.background='#fff1f2';this.style.borderColor='#fecdd3';"
+            onmouseout="this.style.background='transparent';this.style.borderColor='transparent';">
+            <i class="fa-solid fa-trash-can text-xs"></i> Kosongkan Data
+          </button>
+        </div>
+        <div class="overflow-auto" style="max-height:220px;">
+          <table class="w-full text-sm border-collapse">
+            <thead>
+              <tr style="background:#f8fafc;border-bottom:1px solid #f1f5f9;position:sticky;top:0;">
+                <th class="text-left py-3 px-5 text-xs font-bold uppercase tracking-wider" style="color:#94a3b8;width:56px;">No</th>
+                <th class="text-left py-3 px-4 text-xs font-bold uppercase tracking-wider" style="color:#94a3b8;">Nama Lengkap</th>
+                <th class="text-left py-3 px-4 text-xs font-bold uppercase tracking-wider" style="color:#94a3b8;">NIS</th>
+                <th class="text-left py-3 px-4 text-xs font-bold uppercase tracking-wider" style="color:#94a3b8;">NISN</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-body">
+              <tr id="tbl-empty">
+                <td colspan="4" class="py-14 text-center">
+                  <i class="fa-solid fa-inbox text-4xl block mb-3" style="color:#e2e8f0;"></i>
+                  <p class="font-semibold" style="color:#94a3b8;">Belum ada data siswa</p>
+                  <p class="text-xs mt-1" style="color:#cbd5e1;">Impor file Excel atau klik "Muat Data Simulasi"</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Screen Preview -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-display text-sm" style="color:#6366f1;"></i>
+            <span class="text-sm font-bold" style="color:#334155;">Pratinjau Kertas F4</span>
+            <code class="text-xs font-mono px-2 py-0.5 rounded-full" style="background:#f1f5f9;color:#64748b;">215×330mm — Skala visual</code>
+          </div>
+          <span class="text-xs font-mono" style="color:#64748b;">
+            Menampilkan <strong id="ui-preview-pages" style="color:#334155;">1</strong> lembar
+          </span>
+        </div>
+        <div class="rounded-2xl overflow-auto" style="background:#0d1117;padding:52px 0;min-height:560px;">
+          <div style="display:flex;justify-content:center;align-items:flex-start;padding:0 52px;min-width:max-content;">
+            <div id="preview-stage" style="display:flex;gap:28px;align-items:flex-start;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end scrollable body -->
+  </main>
+</div>
+
+<!-- PRINT AREA -->
+<div id="print-area"></div>
+
+<!-- Toast -->
+<div id="toast" style="position:fixed;top:20px;right:20px;z-index:9999;display:none;"></div>
+
+<!-- ══════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────
+   CONSTANTS & STATE
+───────────────────────────────── */
+const STORAGE_KEY = 'labelku_v6';
+const COLOR_KEY   = 'labelku_color_v6';
+const PER_PAGE    = 20;
+const LOGO_URL    = 'https://freeimghost.com/images/2026/01/22/Kabupaten-Bekasi.md.png';
+const CM_Y = [15,45,75,105,135,165,195,225,255,285,315];
+const CM_X = [17.5,107.5,197.5];
+
+const COLOR_MAP = {
+  '#000000': 'Classic Black',
+  '#4f46e5': 'Elegant Indigo',
+  '#059669': 'Emerald Green',
+  '#dc2626': 'Crimson Red',
+  '#d97706': 'Luxury Amber',
+};
+
+let students   = [];
+let labelColor = '#000000';
+
+/* ─────────────────────────────────
+   BOOT
+───────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  try { const r = localStorage.getItem(STORAGE_KEY); if (r) students = JSON.parse(r); } catch(e){}
+  const saved = localStorage.getItem(COLOR_KEY);
+  if (saved && COLOR_MAP[saved]) {
+    labelColor = saved;
+    applyColorUI(saved, false);
+  }
+  renderAll();
+});
+
+/* ─────────────────────────────────
+   COLOR SYSTEM
+───────────────────────────────── */
+function setColor(btn) {
+  const color = btn.dataset.color;
+  labelColor = color;
+  localStorage.setItem(COLOR_KEY, color);
+  applyColorUI(color, true);
+  renderAll();
+}
+function setColorFromSelect(color) {
+  labelColor = color;
+  localStorage.setItem(COLOR_KEY, color);
+  applyColorUI(color, true);
+  renderAll();
+}
+function applyColorUI(color, animate) {
+  // Update CSS var
+  document.documentElement.style.setProperty('--lbc', color);
+  // Update swatch selection
+  document.querySelectorAll('.cswatch').forEach(b => {
+    const isSelected = b.dataset.color === color;
+    b.classList.toggle('selected', isSelected);
+  });
+  // Update preview bar
+  const bar = document.getElementById('color-bar');
+  bar.style.background = color;
+  if (animate) { bar.style.transform = 'scaleX(1.04)'; setTimeout(() => bar.style.transform = '', 200); }
+  // Update name
+  document.getElementById('color-name').textContent = COLOR_MAP[color] || color;
+  // Sync select
+  document.getElementById('color-select').value = color;
+}
+
+/* ─────────────────────────────────
+   RENDER ALL
+───────────────────────────────── */
+function renderAll() {
+  renderStats();
+  renderTable();
+  renderScreenPreview();
+  buildPrintArea();
+}
+
+/* ─────────────────────────────────
+   STATS
+───────────────────────────────── */
+function renderStats() {
+  const n = students.length;
+  const p = n ? Math.ceil(n / PER_PAGE) : 0;
+  document.getElementById('ui-count').textContent        = n;
+  document.getElementById('ui-pages').textContent        = p + ' lembar';
+  document.getElementById('ui-badge').textContent        = n + ' data';
+  document.getElementById('ui-preview-pages').textContent = Math.max(p, 1);
+}
+
+/* ─────────────────────────────────
+   TABLE
+───────────────────────────────── */
+function renderTable() {
+  const tbody = document.getElementById('tbl-body');
+  tbody.querySelectorAll('tr.dr').forEach(r => r.remove());
+  document.getElementById('tbl-empty').style.display = students.length ? 'none' : '';
+  students.forEach((s, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'dr';
+    tr.style.cssText = 'border-bottom:1px solid #f8fafc;transition:background .1s;';
+    tr.innerHTML = `
+      <td style="padding:10px 20px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#94a3b8;">${String(i+1).padStart(3,'0')}</td>
+      <td style="padding:10px 16px;font-weight:600;color:#0f172a;font-size:13px;">${esc(s.nama)}</td>
+      <td style="padding:10px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#475569;">${esc(s.nis||'—')}</td>
+      <td style="padding:10px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#475569;">${esc(s.nisn||'—')}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ─────────────────────────────────
+   FORMAT IDENTITY (NIS/NISN)
+───────────────────────────────── */
+function fmtId(s) {
+  const n = (s.nis  || '').toString().trim();
+  const x = (s.nisn || '').toString().trim();
+  if (n && x) return `NIS/NISN : ${n} / ${x}`;
+  if (n)      return `NIS/NISN : ${n} / -`;
+  if (x)      return `NIS/NISN : - / ${x}`;
+  return 'NIS/NISN : -';
+}
+
+/* ─────────────────────────────────
+   SCREEN PREVIEW
+───────────────────────────────── */
+function renderScreenPreview() {
+  const stage = document.getElementById('preview-stage');
+  stage.innerHTML = '';
+  const pc = students.length ? Math.ceil(students.length / PER_PAGE) : 1;
+
+  for (let p = 0; p < pc; p++) {
+    const paper = mk('div', 'sc-paper');
+    const grid  = mk('div', 'sc-grid');
+
+    for (let i = 0; i < PER_PAGE; i++) {
+      const s    = students[p * PER_PAGE + i] || null;
+      const cell = mk('div', 'sc-label' + (s ? '' : ' is-empty'));
+      cell.style.borderColor = labelColor;
+      cell.innerHTML = `
+        <div class="sl-top" style="background:linear-gradient(90deg,${labelColor} 0%,${blendToBlue(labelColor)} 100%)!important;opacity:.9;"></div>
+        <img class="sl-logo" src="${LOGO_URL}" alt="Logo" loading="lazy">
+        <div class="sl-body">
+          <div class="sl-name">${s ? esc(s.nama) : 'Blank Slot'}</div>
+          <div class="sl-id">${s ? esc(fmtId(s)) : ''}</div>
+        </div>`;
+      grid.appendChild(cell);
+    }
+    paper.appendChild(grid);
+
+    const lbl = mk('div', 'sc-page-lbl');
+    lbl.textContent = `Lembar ${p+1} / ${pc}`;
+    paper.appendChild(lbl);
+
+    stage.appendChild(paper);
+  }
+}
+
+/* ─────────────────────────────────
+   PRINT AREA BUILDER
+───────────────────────────────── */
+function buildPrintArea() {
+  const area = document.getElementById('print-area');
+  area.innerHTML = '';
+  const pc = students.length ? Math.ceil(students.length / PER_PAGE) : 1;
+
+  for (let p = 0; p < pc; p++) {
+    const page = mk('div', 'pp');
+
+    // Label grid
+    const grid = mk('div', 'pp-grid');
+    for (let i = 0; i < PER_PAGE; i++) {
+      const s     = students[p * PER_PAGE + i] || null;
+      const label = mk('div', 'pl');
+      label.style.borderColor = labelColor;
+      label.innerHTML = `
+        <div class="pl-top" style="background:linear-gradient(90deg,${labelColor} 0%,${blendToBlue(labelColor)} 100%)!important;"></div>
+        <img class="pl-logo" src="${LOGO_URL}" alt="Logo">
+        <div class="pl-body">
+          <span class="pl-name">${s ? esc(s.nama) : ''}</span>
+          <span class="pl-id">${s ? esc(fmtId(s)) : ''}</span>
+        </div>`;
+      grid.appendChild(label);
+    }
+    page.appendChild(grid);
+
+    // Horizontal crop marks
+    CM_Y.forEach(y => {
+      const hl = mk('div','cm-hl'); hl.style.top=`${y}mm`; page.appendChild(hl);
+      const sl = mk('i','fa-solid fa-scissors sci');
+      sl.style.cssText=`top:calc(${y}mm - 1.4mm);left:11.8mm;transform:rotate(0deg);`;
+      page.appendChild(sl);
+
+      const hr = mk('div','cm-hr'); hr.style.top=`${y}mm`; page.appendChild(hr);
+      const sr = mk('i','fa-solid fa-scissors sci');
+      sr.style.cssText=`top:calc(${y}mm - 1.4mm);right:11.8mm;transform:rotate(180deg);`;
+      page.appendChild(sr);
+    });
+
+    // Vertical crop marks
+    CM_X.forEach(x => {
+      const vt = mk('div','cm-vt'); vt.style.left=`${x}mm`; page.appendChild(vt);
+      const st = mk('i','fa-solid fa-scissors sci');
+      st.style.cssText=`top:9.8mm;left:calc(${x}mm - 1.4mm);transform:rotate(90deg);`;
+      page.appendChild(st);
+
+      const vb = mk('div','cm-vb'); vb.style.left=`${x}mm`; page.appendChild(vb);
+      const sb = mk('i','fa-solid fa-scissors sci');
+      sb.style.cssText=`bottom:9.8mm;left:calc(${x}mm - 1.4mm);transform:rotate(270deg);`;
+      page.appendChild(sb);
+    });
+
+    area.appendChild(page);
+  }
+}
+
+/* ─────────────────────────────────
+   BLEND helper for gradient bar
+   (shifts hue 30° toward blue so
+   the top bar always looks gradient)
+───────────────────────────────── */
+function blendToBlue(hex) {
+  try {
+    let r = parseInt(hex.slice(1,3),16);
+    let g = parseInt(hex.slice(3,5),16);
+    let b = parseInt(hex.slice(5,7),16);
+    // simple blend: push towards #3b82f6
+    r = Math.round(r*.55 + 0x3b*.45);
+    g = Math.round(g*.55 + 0x82*.45);
+    b = Math.round(b*.55 + 0xf6*.45);
+    return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+  } catch(e){ return hex; }
+}
+
+/* ─────────────────────────────────
+   EXCEL PARSING (ROBUST)
+───────────────────────────────── */
+function findKey(row, tests) {
+  const keys = Object.keys(row);
+  for (const t of tests) {
+    const k = keys.find(k => t(k.toLowerCase()));
+    if (k !== undefined) return k;
+  }
+  return null;
+}
+
+function parseExcel(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb   = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) { toast('File Excel kosong atau tidak terbaca.', 'err'); return; }
+
+      const R0     = rows[0];
+      const nKey   = findKey(R0, [k=>k==='nama', k=>k.includes('nama'), k=>k.includes('peserta'), k=>k.includes('siswa')]);
+      const nisnK  = findKey(R0, [k=>k==='nisn',  k=>k.includes('nisn')]);
+      const nisK   = findKey(R0, [k=>k==='nis' && !k.includes('nisn'), k=>k.includes('nis') && !k.includes('nisn')]);
+
+      if (!nKey) { toast('Kolom "Nama/Peserta/Siswa" tidak ditemukan!', 'err'); return; }
+
+      const imported = [];
+      rows.forEach(r => {
+        const nama = String(r[nKey] || '').trim();
+        if (!nama) return;
+        const nis  = nisK  ? String(r[nisK]  || '').trim() : '';
+        const nisn = nisnK ? String(r[nisnK] || '').trim() : '';
+        imported.push({ nama, nis, nisn });
+      });
+      if (!imported.length) { toast('Tidak ada baris data yang valid.', 'err'); return; }
+
+      students = imported;
+      save(); renderAll();
+      toast(`${imported.length} data berhasil diimpor!`, 'ok');
+    } catch(err) {
+      toast('Gagal memproses file Excel.', 'err');
+      console.error(err);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+/* ─────────────────────────────────
+   DROPZONE
+───────────────────────────────── */
+function onFileSelect(e) { if (e.target.files[0]) parseExcel(e.target.files[0]); e.target.value=''; }
+function onDragOver(e)   { e.preventDefault(); document.getElementById('dropzone').classList.add('dz-over'); }
+function onDragLeave()   { document.getElementById('dropzone').classList.remove('dz-over'); }
+function onDrop(e)       { e.preventDefault(); document.getElementById('dropzone').classList.remove('dz-over'); if(e.dataTransfer.files[0]) parseExcel(e.dataTransfer.files[0]); }
+
+/* ─────────────────────────────────
+   SIMULATION DATA (25 → 2 pages)
+───────────────────────────────── */
+function loadSimulation() {
+  const names = [
+    'Aisyah Rahma Dewi','Bima Arya Santoso','Citra Nindya Putri','Dava Rizky Pratama',
+    'Elsa Kumala Sari','Fajar Ramadhan Putra','Galuh Pramesti Ayu','Hendra Kurniawan',
+    'Indah Permatasari','Joko Susilo Wibowo','Kartika Dewi Lestari','Luthfi Ardiansyah',
+    'Mia Anggraeni Sari','Naufal Hakim Saputra','Oktaviana Putri','Pradana Bagas Nugroho',
+    'Qonita Nadia Fitri','Raka Satria Wijaya','Salsabila Nur Hidayah','Teguh Firmansyah',
+    'Ulfa Nur Azizah','Vino Satriawan','Winda Ayu Lestari','Xaverius Budi Santoso','Yoga Prasetya',
+  ];
+  students = names.map((nama, i) => ({
+    nama,
+    nis:  String(10001 + i),
+    nisn: String(2024000001 + i).padStart(10, '0'),
+  }));
+  save(); renderAll();
+  toast(`${students.length} data simulasi dimuat → 2 lembar F4`, 'ok');
+}
+
+/* ─────────────────────────────────
+   CLEAR
+───────────────────────────────── */
+function clearData() {
+  if (!students.length) return;
+  if (!confirm(`Hapus ${students.length} data siswa?`)) return;
+  students = [];
+  save(); renderAll();
+  toast('Semua data berhasil dikosongkan.', 'info');
+}
+
+/* ─────────────────────────────────
+   PRINT
+───────────────────────────────── */
+function triggerPrint() {
+  if (!students.length) { toast('Tidak ada data untuk dicetak!', 'err'); return; }
+  window.print();
+}
+
+/* ─────────────────────────────────
+   STORAGE
+───────────────────────────────── */
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(students)); } catch(e) {}
+}
+
+/* ─────────────────────────────────
+   TOAST
+───────────────────────────────── */
+const TH = {
+  ok:   { bg:'#0f172a', icon:'fa-circle-check', ic:'#34d399' },
+  err:  { bg:'#450a0a', icon:'fa-circle-xmark', ic:'#f87171' },
+  info: { bg:'#0c1a3a', icon:'fa-circle-info',  ic:'#60a5fa' },
+};
+let _tt;
+function toast(msg, type='ok') {
+  clearTimeout(_tt);
+  const c = TH[type]||TH.ok;
+  const b = document.getElementById('toast');
+  b.style.cssText=`display:flex;background:${c.bg};border-radius:14px;padding:13px 20px;align-items:center;gap:10px;font-size:13.5px;font-weight:600;color:#fff;box-shadow:0 20px 60px rgba(0,0,0,.4);position:fixed;top:20px;right:20px;z-index:9999;animation:toastIn .25s cubic-bezier(.34,1.56,.64,1) both;`;
+  b.innerHTML=`<i class="fa-solid ${c.icon}" style="color:${c.ic};font-size:15px;"></i><span>${esc(msg)}</span>`;
+  _tt = setTimeout(()=>{b.style.display='none';},3800);
+}
+
+/* ─────────────────────────────────
+   HELPERS
+───────────────────────────────── */
+function mk(tag, cls) { const e=document.createElement(tag); if(cls)e.className=cls; return e; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
